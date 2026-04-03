@@ -33,6 +33,10 @@ message = None
 message_color = (255, 255, 255)
 message_time = 0
 
+promotion_square = None
+promotion_from = None
+promotion_color = None
+
 while running:
 
     for event in pygame.event.get():
@@ -41,6 +45,34 @@ while running:
             running = False
 
         if event.type == pygame.MOUSEBUTTONDOWN and message is None:
+
+            if promotion_square is not None:
+                x, y = pygame.mouse.get_pos()
+                index = x // (SQ_SIZE * 2)
+
+                if index < 4:
+                    options = [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]
+                    promo_piece = options[index]
+
+                    move = chess.Move(
+                        promotion_from,
+                        promotion_square,
+                        promotion=promo_piece
+                    )
+
+                    if move in board.legal_moves:
+                        board.push(move)
+
+                        root = Node(board.copy(), player=board.turn)
+                        best = mcts(root, 300)
+
+                        if best:
+                            board.push(best.move)
+
+                promotion_square = None
+                promotion_from = None
+                promotion_color = None
+                continue
 
             x, y = pygame.mouse.get_pos()
 
@@ -63,14 +95,20 @@ while running:
                 piece = board.piece_at(selected)
 
                 if piece and piece.piece_type == chess.PAWN:
-                    if (piece.color == chess.WHITE and chess.square_rank(square) == 7) or \
-                       (piece.color == chess.BLACK and chess.square_rank(square) == 0):
+                    rank = chess.square_rank(square)
 
-                        move = chess.Move(selected, square, promotion=chess.QUEEN)
-                    else:
-                        move = chess.Move(selected, square)
-                else:
-                    move = chess.Move(selected, square)
+                    if (piece.color == chess.WHITE and rank == 7) or \
+                       (piece.color == chess.BLACK and rank == 0):
+
+                        promotion_square = square
+                        promotion_from = selected
+                        promotion_color = piece.color
+
+                        selected = None
+                        legal_targets = []
+                        continue
+
+                move = chess.Move(selected, square)
 
                 if move in board.legal_moves:
                     board.push(move)
@@ -89,6 +127,9 @@ while running:
                         message_time = time.time()
                         selected = None
                         legal_targets = []
+                        continue
+
+                    if promotion_square is not None:
                         continue
 
                     root = Node(board.copy(), player=board.turn)
@@ -116,6 +157,20 @@ while running:
     draw_board(screen)
     draw_moves(screen, legal_targets)
     draw_pieces(screen, board, pieces)
+
+    if promotion_square is not None:
+        options = ["q", "r", "b", "n"]
+
+        for i, p in enumerate(options):
+            key = ("w" if promotion_color == chess.WHITE else "b") + p
+            img = pieces[key]
+
+            x = i * SQ_SIZE * 2
+            y = WIDTH // 2 - SQ_SIZE
+
+            rect = pygame.Rect(x, y, SQ_SIZE*2, SQ_SIZE*2)
+            pygame.draw.rect(screen, (50, 50, 50), rect)
+            screen.blit(img, (x + SQ_SIZE//2, y + SQ_SIZE//2))
 
     if message:
         text = font.render(message, True, message_color)
